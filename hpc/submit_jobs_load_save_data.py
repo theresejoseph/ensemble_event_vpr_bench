@@ -7,10 +7,10 @@ job_dir = Path("hpc/jobs")
 job_dir.mkdir(parents=True, exist_ok=True)
 
 # === Configs ===
-dataset_type = "NSAVP"  # or "NSAVP"
-recon_methods = ['RGB_camera']#['eventCount', 'timeSurface', 'eventCount_noPolarity', 'e2vid'] #'eventCount','eventCount_noPolarity', 'timeSurface', 'e2vid' 
+dataset_type = "Brisbane"  # or "NSAVP"
+recon_methods = ['eventCount'] #'eventCount','eventCount_noPolarity', 'timeSurface', 'e2vid' 
 event_counts = [1_000_000] ##  1_000_000, 300_000, 500_000, 100_000, 200_000
-time_resolutions = [0.15, 0.2] #0.05, 0.1, 0.25, 0.5, 1.0
+time_resolutions = [0.2] #0.05, 0.1, 0.25, 0.5, 1.0
 max_bins_list = [20,30,40,50,100]  # Maximum number of bins for adaptive binning
 experiment_pairs = [ (0,1),(2,3), (4,5)] if dataset_type == 'Brisbane' else [(6, 7),(8,9), (10,11)]
 
@@ -19,8 +19,8 @@ base_cmd = "python3 /mnt/hpccs01/home/n10234764/event_vo_vpr/load_and_save.py"
 
 pbs_template = """#!/bin/bash -l
 #PBS -N LAS_{dataset_type}_{job_id}
-#PBS -l walltime=08:30:00
-#PBS -l mem=200GB
+#PBS -l walltime=06:30:00
+#PBS -l mem=120GB
 #PBS -l ncpus=12
 #PBS -l ngpus={use_gpu}
 #PBS -j oe

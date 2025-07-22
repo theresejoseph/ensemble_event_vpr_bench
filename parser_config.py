@@ -41,8 +41,8 @@ default_config = {
     
     'Brisbane': {
         'sequences':["night","morning", "sunrise", "sunset1", "sunset2", "daytime"],
-        'ref_seq_idx': 1,
-        'qry_seq_idx': 4,
+        'ref_seq_idx': 5,
+        'qry_seq_idx': 3,
         'reconstruct_method_name': 'eventCount',
         'metric_data_spacing':10,
         'num_samples_per_location': 1, #range {1,2,5,10}

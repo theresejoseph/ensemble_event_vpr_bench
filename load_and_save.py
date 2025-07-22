@@ -172,10 +172,6 @@ def load_save_data(dataset, reconstructor, args, ref_or_qry, return_data=True):
             saved_count += 1
 
         print(f"Saved {saved_count} new images, skipped {skipped_count}.")
-
-        # --- Save video ---
-        if args.save_frames_video:
-            save_video(sequence_dir, args.video_filename)
     elif return_data:
         sequence_dir = args.save_images_dir
         image_paths = sorted(list(Path(sequence_dir).glob("*.jpg")) + list(Path(sequence_dir).glob("*.png")), key=extract_frame_index)
@@ -205,8 +201,10 @@ def load_save_data(dataset, reconstructor, args, ref_or_qry, return_data=True):
         print(f"Loaded {len(frames)} frames and positions from {sequence_dir}")
     else:
         frames, gt_positions = [], []
-
-        
+    # --- Save video ---
+    if args.save_frames_video:
+        save_video(sequence_dir, args.video_filename)
+    
     return frames,  gt_positions
 
 

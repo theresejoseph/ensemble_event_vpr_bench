@@ -1,0 +1,14 @@
+#!/bin/bash -l
+#PBS -N LAS_Brisbane_57
+#PBS -l walltime=08:30:00
+#PBS -l mem=200GB
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -j oe
+#PBS -o hpc/outputs/LAS_Brisbane_57.txt
+#PBS -e hpc/outputs/LAS_Brisbane_57_err.txt
+
+cd $PBS_O_WORKDIR
+conda activate vpr_eval_py310
+
+python3 /mnt/hpccs01/home/n10234764/event_vo_vpr/load_and_save.py --dataset_type Brisbane --reconstruct_method_name e2vid --time_res 0.1 --adaptive_bin 0 --count_bin 0 --events_per_bin 0 --max_bins 0 --ref_seq_idx 0 --qry_seq_idx 1 

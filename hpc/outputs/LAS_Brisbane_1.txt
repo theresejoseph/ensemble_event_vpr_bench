@@ -1,0 +1,12 @@
+Using dataset type: Brisbane
+2 3
+Processing sequence: sunrise for ref  from ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunrise
+Saving video to ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunrise_eventCount_0.2.mp4
+Video successfully saved to ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunrise_eventCount_0.2.mp4
+Processing sequence: sunset1 for qry  from ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunset1
+Saving video to ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunset1_eventCount_0.2.mp4
+Video successfully saved to ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.2/eventCount/sunset1_eventCount_0.2.mp4
+PBS Job 8671689.aqua
+CPU time  : 00:00:14
+Wall time : 00:00:46
+Mem usage : 77380kb

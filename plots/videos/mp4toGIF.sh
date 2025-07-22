@@ -19,8 +19,8 @@ filelocations=(
 
 for file in "${filelocations[@]}"; do
   duration=$(ffprobe -v error -select_streams v:0 -show_entries format=duration -of csv=p=0 "$file")
-  start=$(echo "$duration * 0.9" | bc -l)
-  length=$(echo "$duration * 0.1" | bc -l)
+  start=$(echo "$duration * 0.5" | bc -l)
+  length=$(echo "$duration * 0.05" | bc -l)
 
   start_fmt=$(printf "%.2f" "$start")
   length_fmt=$(printf "%.2f" "$length")
