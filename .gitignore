@@ -1,0 +1,13 @@
+logs/
+vpr_methods_evaluation/trained_models/
+e2vid/pretrained/
+plots/video/R0_RN0_eventCount_1.0.mp4
+plots/video/R0_RN0_eventCount_noPolarity_1.0.mp4
+plots/video/R0_FA0_eventCount_noPolarity_1.0.mp4
+plots/video/R0_RN0_timeSurface_1.0.mp4
+plots/videos/R0_RN0_timeSurface_1.0.gif
+plots/videos/R0_FA0_e2vid_1.0.gif
+plots/videos/R0_FA0_eventCount_noPolarity_1.0.gif
+plots/videos/R0_FA0_timeSurface_1.0.gif
+plots/videos/R0_RN0_e2vid_1.0.gif
+plots/videos/R0_RN0_eventCount_noPolarity_1.0.gif

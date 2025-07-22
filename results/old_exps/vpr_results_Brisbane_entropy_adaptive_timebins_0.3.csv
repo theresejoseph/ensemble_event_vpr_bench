@@ -1,0 +1,11 @@
+ref_seq,qry_seq,reconstruction_name,vpr_method,seq_len,bin_type,binning_strategy,events_per_bin,time_res,positive_dist_thresh,patch_or_frame,seq_match_type,num_qry_frames,num_ref_frames,recall_at_1,auc,runtime
+sunset1,daytime,eventCount,mixvpr,1,timebin,adaptive,,,25,frame,modified,1608,1331,0.3893,,32.13
+sunset1,daytime,eventCount,mixvpr,1,timebin,adaptive,,,25,patch,modified,1608,1331,0.4782,,86.30
+sunset1,daytime,eventCount,mixvpr,20,timebin,adaptive,,,25,patch,modified,1608,1331,0.5448,,32.92
+sunset1,daytime,eventCount,mixvpr,20,timebin,adaptive,,,25,frame,modified,1608,1331,0.4876,,5.54
+sunset1,daytime,eventCount,mixvpr,10,timebin,adaptive,,,25,frame,modified,1608,1331,0.4229,,5.46
+sunset1,daytime,eventCount,mixvpr,10,timebin,adaptive,,,25,patch,modified,1608,1331,0.5137,,30.53
+sunset1,daytime,eventCount,mixvpr,15,timebin,adaptive,,,25,patch,modified,1608,1331,0.5479,,32.56
+sunset1,daytime,eventCount,mixvpr,25,timebin,adaptive,,,25,patch,modified,1608,1331,0.5553,,28.10
+sunset1,daytime,eventCount,mixvpr,25,timebin,adaptive,,,25,patch,modified,1608,1331,0.5417,,27.23
+
