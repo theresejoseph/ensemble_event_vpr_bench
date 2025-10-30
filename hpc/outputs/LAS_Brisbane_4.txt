@@ -1,8 +1,0 @@
-Using dataset type: Brisbane
-2 3
-Processing sequence: sunrise for ref  from ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.1/eventCount/sunrise
-Processing sequence: sunset1 for qry  from ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_0.1/eventCount/sunset1
-PBS Job 8671692.aqua
-CPU time  : 00:00:03
-Wall time : 00:00:01
-Mem usage : 0kb

@@ -31,54 +31,6 @@ time_res = [0.1, 0.2, 0.5, 1.0]
 
 ------------------------------------------------------------------------------------------------------------------ '''
 
-
-# def split_into_patches(imgs, args):
-#     """
-#     Split a batch of images into patches.
-
-#     Returns:
-#         patches (List[torch.Tensor]) or None if patches are too small
-#     """
-#     B, C, H, W = imgs.shape
-#     patches = []
-
-#     min_patch_size = 14 # megaloc requires larger patches
-
-#     if args.grid_or_nest == 'grid':
-#         num_rows = args.patch_num_rows
-#         num_cols = args.patch_num_cols
-#         patch_H = H // num_rows
-#         patch_W = W // num_cols
-
-#         if patch_H < min_patch_size or patch_W < min_patch_size:
-#             print(f"❌ Skipping config: patch size too small ({patch_H}x{patch_W})")
-#             return None
-
-#         for r in range(num_rows):
-#             for c in range(num_cols):
-#                 patch = imgs[:, :, r*patch_H:(r+1)*patch_H, c*patch_W:(c+1)*patch_W]
-#                 patches.append(patch)
-
-#     elif args.grid_or_nest == 'nest':
-#         scale_factor = args.nest_scale_factor
-#         for i in range(args.num_patches):
-#             scale = scale_factor ** i
-#             crop_H = int(H * scale)
-#             crop_W = int(W * scale)
-
-#             if crop_H < min_patch_size or crop_W < min_patch_size:
-#                 print(f"❌ Skipping nested patch {i}: too small ({crop_H}x{crop_W})")
-#                 return None
-
-#             start_H = (H - crop_H) // 2
-#             start_W = (W - crop_W) // 2
-#             patch = imgs[:, :, start_H:start_H+crop_H, start_W:start_W+crop_W]
-#             patches.append(patch)
-#     else:
-#         raise ValueError(f"Unknown patch mode: {args.grid_or_nest}")
-
-#     return patches
-
 def split_into_patches(imgs, args):
     """
     Split a batch of images into patches.
@@ -103,6 +55,8 @@ def split_into_patches(imgs, args):
             patches.append(patch)
     
     return patches  
+
+
 
 def extract_patch_descriptors(args, model, img_batch, device):
     """
@@ -421,6 +375,7 @@ def seq_match_row(simMat, row_idx, seq_len, seq_match_type='modified'):
     Row‑wise diagonal sequence matching using z score normalization to avoid collapse to zero.
     """
     from scipy.ndimage import uniform_filter1d
+    Q, R = simMat.shape
     if seq_match_type == 'seqslam':
         if row_idx < seq_len - 1:
             return np.full(R, -np.inf)
@@ -430,27 +385,23 @@ def seq_match_row(simMat, row_idx, seq_len, seq_match_type='modified'):
         enhanced_sim = (simMat - local_mean) / local_std
         
         seq_scores = np.full(R, -np.inf)
-        min_velocity = 0.8
-        max_velocity = 1.2
-        
         for j in range(seq_len - 1, R):
             best_score = -np.inf
-            for v in np.linspace(min_velocity, max_velocity, 10):
-                score = 0
-                valid_sequence = True
-                for k in range(seq_len):
-                    q_idx = row_idx - seq_len + 1 + k
-                    r_idx = int(j - (seq_len - 1 - k) * v)
-                    if r_idx < 0 or r_idx >= R:
-                        valid_sequence = False
-                        break
-                    score += enhanced_sim[q_idx, r_idx]
-                if valid_sequence and score > best_score:
-                    best_score = score
+            v=1
+            score = 0
+            valid_sequence = True
+            for k in range(seq_len):
+                q_idx = row_idx - seq_len + 1 + k
+                r_idx = int(j - (seq_len - 1 - k) * v)
+                if r_idx < 0 or r_idx >= R:
+                    valid_sequence = False
+                    break
+                score += enhanced_sim[q_idx, r_idx]
+            if valid_sequence and score > best_score:
+                best_score = score
             seq_scores[j] = best_score
         return seq_scores
-
-
+    
     elif seq_match_type == 'modified':
         # 1) select the window of rows:
         start_row = max(0, row_idx - seq_len + 1)
@@ -472,6 +423,7 @@ def seq_match_row(simMat, row_idx, seq_len, seq_match_type='modified'):
             seq_match_row[j] = np.trace(block)
 
         return seq_match_row
+
 
 
 def plot_simmat_with_matches(simMat, positives_per_query, save_path, patch_num='', seq_len=1, seq_match_type='modified'):
@@ -504,7 +456,6 @@ def plot_simmat_with_matches(simMat, positives_per_query, save_path, patch_num='
             total += 1
 
     recall = correct / total if total > 0 else 0.0
-    from skimage.measure import shannon_entropy
     print(f"[INFO] {patch_num} Recall: {recall:.4f} , std: {np.std(np.array(seqMat))}")
 
 
@@ -585,47 +536,51 @@ def getPRCurve_sim(similarity_matrix, positives_per_query):
     
     prfData = []
     ub, lb = np.max(mSims), np.min(mSims)  # Upper and lower bounds
-    
-    step = (ub - lb) / 100.0
-    thresholds = np.arange(lb, ub + step, step)
-    
-    for thresh in thresholds:
-        matchFlags = mSims >= thresh  # Matches above threshold
-        outVals = mInds.copy()
-        outVals[~matchFlags] = -1  # Invalidate matches below threshold
+    if ub != lb:
+        step = (ub - lb) / 100.0
+        thresholds = np.arange(lb, ub + step, step)
+        
+        for thresh in thresholds:
+            matchFlags = mSims >= thresh  # Matches above threshold
+            outVals = mInds.copy()
+            outVals[~matchFlags] = -1  # Invalidate matches below threshold
 
-        correct = 0
-        total = 0
-        relevant = 0
+            correct = 0
+            total = 0
+            relevant = 0
 
-        for i in range(len(outVals)):
-            if len(positives_per_query[i]) == 0:
-                continue  # skip queries with no ground truth
-            relevant += 1
+            for i in range(len(outVals)):
+                if len(positives_per_query[i]) == 0:
+                    continue  # skip queries with no ground truth
+                relevant += 1
 
-            pred = int(outVals[i])  # Ensure it's a scalar integer
-            if pred != -1:
-                total += 1
-                if pred in positives_per_query[i]:
-                    correct += 1
+                pred = int(outVals[i])  # Ensure it's a scalar integer
+                if pred != -1:
+                    total += 1
+                    if pred in positives_per_query[i]:
+                        correct += 1
 
-        p = correct / total if total > 0 else 0.0
-        r = correct / relevant if relevant > 0 else 0.0
-        prfData.append([p, r])
-    
-    # Calculate AUC using trapezoidal rule
-    if len(prfData) > 1:
-        precisions = [x[0] for x in prfData]
-        recalls = [x[1] for x in prfData]
-        # Sort by recall for proper AUC calculation
-        sorted_pairs = sorted(zip(recalls, precisions))
-        sorted_recalls, sorted_precisions = zip(*sorted_pairs)
-        auc = np.trapz(sorted_precisions, sorted_recalls)
+            p = correct / total if total > 0 else 0.0
+            r = correct / relevant if relevant > 0 else 0.0
+            prfData.append([p, r])
+        
+        # Calculate AUC using trapezoidal rule
+        if len(prfData) > 1:
+            precisions = [x[0] for x in prfData]
+            recalls = [x[1] for x in prfData]
+            # Sort by recall for proper AUC calculation
+            sorted_pairs = sorted(zip(recalls, precisions))
+            sorted_recalls, sorted_precisions = zip(*sorted_pairs)
+            auc = np.trapz(sorted_precisions, sorted_recalls)
+        else:
+            auc = 0.0
+        
+        return np.array(prfData), auc, recall_at_1  
     else:
+        # If all similarities are the same, return zero precision and recall
+        prfData = np.array([[0.0, 0.0]])
         auc = 0.0
-    
-    return np.array(prfData), auc, recall_at_1
-
+        return prfData, auc, recall_at_1
 
 
 def store_results_to_csv(csv_path, row_dict, header):
@@ -653,137 +608,6 @@ def check_if_result_exists(csv_path, row_dict, key_fields):
                     return False  # AUC is missing → treat as incomplete
                 return True  # Match found and AUC is filled
     return False
-
-
-
-def run_vpr_save_results(args):
-    """
-    Run a single VPR evaluation and return Recall@1 (no CSV output, no seq_len loop).
-    """
-    from load_and_save import make_paths
-
-    metric = 'l2'
-    args.num_patches = args.patch_num_cols * args.patch_num_rows if args.grid_or_nest == 'grid' else args.num_patches
-    seq_len = args.seq_len  # fixed
-    args.positive_dist_threshold = 25
-    args.rep = args.reconstruct_method_name
-    method = args.method
-    patch_or_frame = args.patch_or_frame
-    if patch_or_frame == 'frame':
-        args.patch_num_rows = 1
-        args.patch_num_cols = 1
-    ref_seq = args.sequences[args.idR]
-    qry_seq = args.sequences[args.idQ]
-    
-    
-    # Setup paths
-    make_paths(args, ref_seq)
-    args.database_folder = str(args.save_images_dir)
-    num_ref_frames = len(glob(f"{args.database_folder}/**/*", recursive=True))
-
-    make_paths(args, qry_seq)
-    args.queries_folder = str(args.save_images_dir)
-    num_qry_frames = len(glob(f"{args.queries_folder}/**/*", recursive=True))
-     # Create log directories
-    args.log_dir = f"{args.dataset_type}/{args.subfolder_dir.split('/')[-1]}"
-    csv_path = Path(f"./results/vpr_results_{args.dataset_type}_{args.subfolder_dir.split('/')[-1]}.csv")
-    args.time_res = None if args.count_bin == 1 else args.time_res
-    simMatPath = Path("logs") / args.log_dir / f"{ref_seq}_vs_{qry_seq}_{args.method}_{metric}_reconstruct_{args.reconstruct_method_name}_{args.time_res}_{args.patch_or_frame}_{args.patch_num_rows}_{args.patch_num_cols}.npy"
-
-    if args.idR >= 12 or args.idQ >= 12:
-        csv_path = Path(f'./hpc/patch_grid_search_results1.csv')
-        args.saveSimMat = False
-
-
-    # check if paths are valid
-    if args.save_images_dir is None:
-        print(f"Failed to load data for {ref_seq} vs {qry_seq}")
-        return
-    if not csv_path.exists():
-        print(f"CSV not found: {csv_path}")
-        return
-    print(f"Got paths:")
-    print(f"  Reference: {args.database_folder} ")
-    print(f"  Query: {args.queries_folder} ")
-    print(f"  CSV path: {csv_path}")
-    print(f"  Similarity matrix path: {simMatPath}")
-    
-    
-    csv_header = ["ref_seq", "qry_seq", "reconstruction_name", "vpr_method", 
-                "seq_len", "bin_type","binning_strategy", "events_per_bin", "time_res",
-                "positive_dist_thresh", "patch_or_frame", "seq_match_type", "num_qry_frames",
-                "num_ref_frames","recall_at_1", "auc", "runtime", "patch_rows", "patch_cols"]
-    row_dict = {
-        "ref_seq": ref_seq,
-        "qry_seq": qry_seq,
-        "reconstruction_name": args.reconstruct_method_name,
-        "vpr_method": args.method,
-        "seq_len": seq_len,
-        "bin_type": "countbin" if args.count_bin else "timebin",
-        "binning_strategy": "adaptive" if args.adaptive_bin else "fixed",
-        "events_per_bin": args.events_per_bin if args.count_bin else "",
-        "time_res": args.time_res if not args.adaptive_bin and not args.count_bin else "",
-        "positive_dist_thresh": args.positive_dist_threshold,
-        "patch_or_frame": patch_or_frame,
-        "seq_match_type": args.seq_match_type,
-        "num_qry_frames": num_qry_frames,
-        "num_ref_frames": num_ref_frames,
-        "recall_at_1": "",  # To be filled later
-        "auc": "",          # You can compute and add AUC if needed
-        "runtime": "",
-        "patch_rows": args.patch_num_rows,
-        "patch_cols": args.patch_num_cols}       # To be filled later}
-
-    key_fields = ["ref_seq", "qry_seq", "reconstruction_name", "vpr_method", 
-                  "seq_len", "bin_type", "binning_strategy", "events_per_bin", "time_res",
-                  "positive_dist_thresh", "patch_or_frame", "seq_match_type","num_qry_frames","num_ref_frames", 
-                  "patch_rows", "patch_cols"]
-
-    if check_if_result_exists(csv_path, row_dict, key_fields):
-        print(f"\nSkipping experiment for {ref_seq} vs {qry_seq} with method {method} - already done.\n")
-        return None
-
-    else:
-        S, sim_time = compute_similarity_matrices(simMatPath, args, metric)
-        test_ds = TestDataset(args.database_folder, args.queries_folder, 
-                            positive_dist_threshold=args.positive_dist_threshold, 
-                            image_size=args.image_size, use_labels=args.use_labels)
-        positives_per_query = test_ds.get_positives()
-        print(f"Running VPR: {ref_seq} vs {qry_seq}, method={method}, rep={args.rep}, seq_len={seq_len}")
-        start_match = time.time()
-        
-        if patch_or_frame == 'patch':
-            num_queries, num_refs = S[0].shape
-            combined_smats = np.zeros((num_queries, num_refs), dtype=np.float32)
-            
-            for j in range(args.num_patches):
-                seqMat_patch, _ = plot_simmat_with_matches(S[j], positives_per_query, None, 
-                                                        patch_num=f'_Patch{j}-{args.num_patches}', 
-                                                        seq_len=seq_len, seq_match_type=args.seq_match_type)
-                combined_smats += np.array(seqMat_patch)
-
-            _, all_matches = plot_simmat_with_matches(combined_smats, positives_per_query, None, 
-                                                    patch_num='patch_combined', seq_len=1, seq_match_type=args.seq_match_type)
-            _,auc,r1 =getPRCurve_sim(np.array(combined_smats), positives_per_query)
-        else:
-            seqMat, all_matches = plot_simmat_with_matches(S, positives_per_query, None, 
-                                                    patch_num='frame', seq_len=seq_len, seq_match_type=args.seq_match_type)
-            _,auc,r1 = getPRCurve_sim(np.array(seqMat), positives_per_query)
-
-        correct = sum(best_match_idx in positives_per_query[query_idx] 
-                    for query_idx, best_match_idx, _, _ in all_matches)
-        recall_at_1 = correct / len(all_matches) if len(all_matches) > 0 else 0.0
-        runtime = sim_time + (time.time() - start_match)
-
-        print(f"Recall@1 = {recall_at_1:.3f} | Runtime = {runtime:.2f} sec")
-        row_dict["auc"] = f"{auc:.4f}"
-        row_dict["recall_at_1"] = f"{recall_at_1:.4f}"
-        row_dict["runtime"] = f"{runtime:.2f}"
-        store_results_to_csv(csv_path, row_dict, csv_header)
-
-    return recall_at_1
-
-
 
 
 
@@ -861,9 +685,6 @@ def run_vpr(args):
 
     return recall_at_1, auc
 
-
-
-
 def run_vpr_fill_auc(args):
     from load_and_save import make_paths
     metric = 'l2'
@@ -886,6 +707,7 @@ def run_vpr_fill_auc(args):
     args.queries_folder = str(args.save_images_dir)
     args.log_dir = f"{args.dataset_type}/{args.subfolder_dir.split('/')[-1]}"
     csv_path = Path(f"./results/vpr_results_{args.dataset_type}_{args.subfolder_dir.split('/')[-1]}.csv")
+    # csv_path = Path(f'./results/seqMatchv_vs_modified_results_fixed_timebins.csv')
     simMatPath = Path("logs") / args.log_dir / f"{ref_seq}_vs_{qry_seq}_{args.method}_{metric}_reconstruct_{args.reconstruct_method_name}_{args.time_res}_{args.patch_or_frame}_{args.patch_num_rows}_{args.patch_num_cols}.npy"
     # check if paths are valid
     if args.save_images_dir is None:
@@ -1000,6 +822,143 @@ def run_vpr_fill_auc(args):
 
     else:
         print(f"⚠ Could not uniquely match row for {ref_seq} vs {qry_seq} ({mask.sum()} matches)")
+
+
+
+
+
+
+def run_vpr_save_results(args):
+    """
+    Run a single VPR evaluation and return Recall@1 (no CSV output, no seq_len loop).
+    """
+    from load_and_save import make_paths
+    args.seq_match_type = 'seqslam'
+    metric = 'l2'
+    args.num_patches = args.patch_num_cols * args.patch_num_rows if args.grid_or_nest == 'grid' else args.num_patches
+    seq_len = args.seq_len  # fixed
+    args.positive_dist_threshold = 25
+    args.rep = args.reconstruct_method_name
+    method = args.method
+    patch_or_frame = args.patch_or_frame
+    if patch_or_frame == 'frame':
+        args.patch_num_rows = 1
+        args.patch_num_cols = 1
+    ref_seq = args.sequences[args.idR]
+    qry_seq = args.sequences[args.idQ]
+    
+    
+    # Setup paths
+    make_paths(args, ref_seq)
+    args.database_folder = str(args.save_images_dir)
+    num_ref_frames = len(glob(f"{args.database_folder}/**/*", recursive=True))
+
+    make_paths(args, qry_seq)
+    args.queries_folder = str(args.save_images_dir)
+    num_qry_frames = len(glob(f"{args.queries_folder}/**/*", recursive=True))
+     # Create log directories
+    args.log_dir = f"{args.dataset_type}/{args.subfolder_dir.split('/')[-1]}"
+    # csv_path = Path(f"./results/vpr_results_{args.dataset_type}_{args.subfolder_dir.split('/')[-1]}.csv")
+    csv_path = Path(f'./results/seqMatch_vs_modified_results_fixed_timebins.csv')
+    args.time_res = None if args.count_bin == 1 else args.time_res
+    simMatPath = Path("logs") / args.log_dir / f"{ref_seq}_vs_{qry_seq}_{args.method}_{metric}_reconstruct_{args.reconstruct_method_name}_{args.time_res}_{args.patch_or_frame}_{args.patch_num_rows}_{args.patch_num_cols}.npy"
+
+    if args.idR >= 12 or args.idQ >= 12:
+        csv_path = Path(f'./hpc/patch_grid_search_results1.csv')
+        args.saveSimMat = False
+
+
+    # check if paths are valid
+    if args.save_images_dir is None:
+        print(f"Failed to load data for {ref_seq} vs {qry_seq}")
+        return
+    if not csv_path.exists():
+        print(f"CSV not found: {csv_path}")
+        return
+    print(f"Got paths:")
+    print(f"  Reference: {args.database_folder} ")
+    print(f"  Query: {args.queries_folder} ")
+    print(f"  CSV path: {csv_path}")
+    print(f"  Similarity matrix path: {simMatPath}")
+    
+    
+    csv_header = ["ref_seq", "qry_seq", "reconstruction_name", "vpr_method", 
+                "seq_len", "bin_type","binning_strategy", "events_per_bin", "time_res",
+                "positive_dist_thresh", "patch_or_frame", "seq_match_type", "num_qry_frames",
+                "num_ref_frames","recall_at_1", "auc", "runtime", "patch_rows", "patch_cols"]
+    row_dict = {
+        "ref_seq": ref_seq,
+        "qry_seq": qry_seq,
+        "reconstruction_name": args.reconstruct_method_name,
+        "vpr_method": args.method,
+        "seq_len": seq_len,
+        "bin_type": "countbin" if args.count_bin else "timebin",
+        "binning_strategy": "adaptive" if args.adaptive_bin else "fixed",
+        "events_per_bin": args.events_per_bin if args.count_bin else "",
+        "time_res": args.time_res if not args.adaptive_bin and not args.count_bin else "",
+        "positive_dist_thresh": args.positive_dist_threshold,
+        "patch_or_frame": patch_or_frame,
+        "seq_match_type": args.seq_match_type,
+        "num_qry_frames": num_qry_frames,
+        "num_ref_frames": num_ref_frames,
+        "recall_at_1": "",  # To be filled later
+        "auc": "",          # You can compute and add AUC if needed
+        "runtime": "",
+        "patch_rows": args.patch_num_rows,
+        "patch_cols": args.patch_num_cols}       # To be filled later}
+
+    key_fields = ["ref_seq", "qry_seq", "reconstruction_name", "vpr_method", 
+                  "seq_len", "bin_type", "binning_strategy", "events_per_bin", "time_res",
+                  "positive_dist_thresh", "patch_or_frame", "seq_match_type","num_qry_frames","num_ref_frames", 
+                  "patch_rows", "patch_cols"]
+
+    if check_if_result_exists(csv_path, row_dict, key_fields):
+        print(f"\nSkipping experiment for {ref_seq} vs {qry_seq} with method {method} - already done.\n")
+        return None
+
+    else:
+        S, sim_time = compute_similarity_matrices(simMatPath, args, metric)
+        test_ds = TestDataset(args.database_folder, args.queries_folder, 
+                            positive_dist_threshold=args.positive_dist_threshold, 
+                            image_size=args.image_size, use_labels=args.use_labels)
+        positives_per_query = test_ds.get_positives()
+        print(f"Running VPR: {ref_seq} vs {qry_seq}, method={method}, rep={args.rep}, seq_len={seq_len}")
+        start_match = time.time()
+        
+        if patch_or_frame == 'patch':
+            num_queries, num_refs = S[0].shape
+            combined_smats = np.zeros((num_queries, num_refs), dtype=np.float32)
+            
+            for j in range(args.num_patches):
+                seqMat_patch, _ = plot_simmat_with_matches(S[j], positives_per_query, None, 
+                                                        patch_num=f'_Patch{j}-{args.num_patches}', 
+                                                        seq_len=seq_len, seq_match_type=args.seq_match_type)
+                combined_smats += np.array(seqMat_patch)
+
+            _, all_matches = plot_simmat_with_matches(combined_smats, positives_per_query, None, 
+                                                    patch_num='patch_combined', seq_len=1, seq_match_type=args.seq_match_type)
+            _,auc,r1 =getPRCurve_sim(np.array(combined_smats), positives_per_query)
+        else:
+            seqMat, all_matches = plot_simmat_with_matches(S, positives_per_query, None, 
+                                                    patch_num='frame', seq_len=seq_len, seq_match_type=args.seq_match_type)
+            # _,auc,r1 = getPRCurve_sim(np.array(seqMat), positives_per_query)
+            auc,r1=0,0
+
+        correct = sum(best_match_idx in positives_per_query[query_idx] 
+                    for query_idx, best_match_idx, _, _ in all_matches)
+        recall_at_1 = correct / len(all_matches) if len(all_matches) > 0 else 0.0
+        runtime = sim_time + (time.time() - start_match)
+
+        print(f"Recall@1 = {recall_at_1:.3f} | Runtime = {runtime:.2f} sec")
+        row_dict["auc"] = f"{auc:.4f}"
+        row_dict["recall_at_1"] = f"{recall_at_1:.4f}"
+        row_dict["runtime"] = f"{runtime:.2f}"
+        store_results_to_csv(csv_path, row_dict, csv_header)
+
+    return recall_at_1
+
+
+
 
 
 if __name__ == "__main__":

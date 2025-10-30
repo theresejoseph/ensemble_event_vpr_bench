@@ -1,4 +1,6 @@
 logs/
+hpc/jobs/
+hpc/outputs/
 vpr_methods_evaluation/trained_models/
 e2vid/pretrained/
 plots/videos/R0_RN0_timeSurface_1.0.mp4/

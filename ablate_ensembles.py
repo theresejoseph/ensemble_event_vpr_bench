@@ -8,7 +8,9 @@ import pandas as pd
 from tqdm import tqdm
 from typing import List, Dict
 import argparse
-
+from matplotlib.gridspec import GridSpec
+import matplotlib.pyplot as plt
+import os
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -21,6 +23,7 @@ def parse_args():
     parser.add_argument('--time_strs', required=True)
     parser.add_argument('--seq_len', type=int, default=1)
     return parser.parse_args()
+
 
 
 def apply_sequence_matching(sim_matrix, seq_len, seq_match_type='modified'):
@@ -162,200 +165,90 @@ def compute_recall_and_matrix(
         total += 1
 
     recall_at_1 = correct / total if total > 0 else 0.0
-    return list_simMat, recall_at_1, final_sim_matrix
+    return recall_at_1, final_sim_matrix
 
 
 
-# def general_ensemble(
-#     dataset_name: str,
-#     ref_name: str,
-#     qry_name: str,
-#     vpr_methods: list,
-#     recon_methods: list,
-#     time_strs: list,
-#     ensemble_over: str = 'vpr',  # Options: 'vpr', 'recon', 'time', 'patch'
-#     seqLen: int = 1):
-#     """
-#     General ensemble function. Sums similarity matrices across specified dimensions.
-#     """
-#     print(f"Ensembling for {dataset_name} ({ref_name} vs {qry_name}), ensemble_over={ensemble_over}, seqLen={seqLen}")
-#     suffix = '2_2' if ensemble_over == 'patch' else '1_1'
-#     mode = 'patch' if ensemble_over == 'patch' else 'frame'
-#     smat_list = []
-#     min_rows, min_cols = None, None
-#     positives_per_query = None
-#     count = 0  # number of matrices summed
-
-#     def subsample_smat(smat, step):
-#         nonlocal min_rows, min_cols
-#         rows = np.arange(0, smat.shape[0], step)
-#         cols = np.arange(0, smat.shape[1], step)
-#         smat = smat[np.ix_(rows, cols)]
-#         min_rows = smat.shape[0] if min_rows is None else min(min_rows, smat.shape[0])
-#         min_cols = smat.shape[1] if min_cols is None else min(min_cols, smat.shape[1])
-#         return smat
-
-#     if ensemble_over == 'patch':
-#         time_res = float(time_strs[0])
-#         step = int(1 / time_res)
-#         base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_strs[0]}/")
-#         dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
-#         work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_{time_strs[0]}/{recon_methods[0]}'
-#         queries_folder = f"{work_dir}/{qry_name}"
-#         database_folder = f"{work_dir}/{ref_name}"
-#         test_ds = TestDataset(database_folder, queries_folder,positive_dist_threshold=25, image_size=None, use_labels=True)
-#         positives_per_query = test_ds.get_positives()
-
-#         filename = f"{ref_name}_vs_{qry_name}_{vpr_methods[0]}_l2_reconstruct_{recon_methods[0]}_{time_strs[0]}_{mode}_{suffix}.npy"
-#         file_path = base_dir / filename
-#         if not file_path.exists():
-#             print(f"[!] Missing: {file_path}")
-#         smat_list = np.load(file_path)
-#     else:
-#         for vpr_method in vpr_methods if 'vpr' in ensemble_over else [vpr_methods[0]]:
-#             for recon_method in recon_methods if 'recon' in ensemble_over else [recon_methods[0]]:
-#                 for time_str in time_strs if 'time' in ensemble_over else [time_strs[0]]:
-#                     time_res = float(time_str)
-#                     step = int(1 / time_res)
-#                     base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_str}/")
-#                     dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
-#                     work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_{time_str}/{recon_method}'
-#                     queries_folder = f"{work_dir}/{qry_name}"
-#                     database_folder = f"{work_dir}/{ref_name}"
-
-#                     test_ds = TestDataset(
-#                         database_folder, queries_folder,
-#                         positive_dist_threshold=25, image_size=None, use_labels=True)
-#                     positives_per_query = test_ds.get_positives()
-
-#                     filename = f"{ref_name}_vs_{qry_name}_{vpr_method}_l2_reconstruct_{recon_method}_{time_str}_{mode}_{suffix}.npy"
-#                     file_path = base_dir / filename
-#                     if not file_path.exists():
-#                         print(f"[!] Missing: {file_path}")
-#                         continue
-
-#                     smat = np.load(file_path)
-
-#                     smat = subsample_smat(smat, step)
-#                     smat_list.append(smat)
-#                     count += 1
-
-#     # Check if matrices have different shapes and crop if needed
-#     if len(smat_list) > 1:
-#         shapes = [s.shape for s in smat_list]
-#         if not all(shape == shapes[0] for shape in shapes):
-#             smat_list = [s[:min_rows, :min_cols] for s in smat_list] # Crop to smallest shape
-
-#     # Final recall
-#     recall, combinedSimMat = compute_recall_and_matrix(
-#         smat_list, positives_per_query,
-#         seq_len=seqLen, mode='list_simMat',
-#         seq_match_type='modified',
-#         apply_sequence_matching_fn=apply_sequence_matching
-#     )
-#     print(f"\n\n\n{count} ensembles with recall@1: {recall:.4f} for {dataset_name} ({ref_name} vs {qry_name}), ensemble_over={ensemble_over}, seqLen={seqLen}")
-
-#     return combinedSimMat, recall
+def compute_recall_at_1(similarity_matrix, positives_per_query):
+        correct = 0
+        total = len(positives_per_query)
+        for q_idx, positives in enumerate(positives_per_query):
+            if len(positives) == 0:
+                continue
+            predicted = np.argmax(similarity_matrix[q_idx])
+            if predicted in positives:
+                correct += 1
+        return correct / total if total > 0 else 0.0
 
 
-def general_ensemble(
-    ref_name: str,
-    qry_name: str,
-    vpr_methods: list,
-    recon_methods: list,
-    time_strs: list,
-    ensemble_over: str = 'vpr',  # Options: 'vpr', 'recon', 'time', 'patch'
-    seqLen: int = 1):
+
+def plot_ensemble_similarity_matrices(
+    smat_list,
+    fused_smat,
+    positives_per_query,
+    plotname):
     """
-    General ensemble function. Sums similarity matrices across specified dimensions.
+    Plot 4 ensemble member similarity matrices and the fused matrix.
+    Automatically names and saves the plot based on ensemble settings.
     """
-    if ref_name.startswith('R0_') or qry_name.startswith('R0_'):
-        dataset_name = 'NSAVP'
-    else:
-        dataset_name = 'Brisbane'
+    if len(smat_list) != 4:
+        raise ValueError("This plotting layout assumes exactly 4 ensemble members.")
 
-    print(f"Ensembling for {dataset_name} ({ref_name} vs {qry_name}), ensemble_over={ensemble_over}, seqLen={seqLen}")
-    suffix = '2_2' if ensemble_over == 'patch' else '1_1'
-    mode = 'patch' if ensemble_over == 'patch' else 'frame'
-    smat_list = []
-    min_rows, min_cols = None, None
-    count = 0  # number of matrices summed
+    # Compute individual recalls
+    member_recalls = [compute_recall_at_1(smat, positives_per_query) for smat in smat_list]
 
-    def subsample_smat(smat, step):
-        # nonlocal min_rows, min_cols
-        # rows = np.arange(0, smat.shape[0], step)
-        # cols = np.arange(0, smat.shape[1], step)
-        # smat = smat[np.ix_(rows, cols)]
-        # min_rows = smat.shape[0] if min_rows is None else min(min_rows, smat.shape[0])
-        # min_cols = smat.shape[1] if min_cols is None else min(min_cols, smat.shape[1])
-        return smat
+    fig = plt.figure(figsize=(14, 8))
+    gs = GridSpec(2, 3, figure=fig)
+    positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    for i, (row, col) in enumerate(positions):
+        ax = fig.add_subplot(gs[row, col])
+        mat = smat_list[i]
+        ax.imshow(mat, aspect='auto', cmap='Blues')
+        ax.set_title(f"Member {i+1}\n(recall@1 = {member_recalls[i]:.4f})")
+        ax.set_xlabel("Database")
+        ax.set_ylabel("Query")
+        ax.grid(False)
 
-    
-    
-    
-    if ensemble_over == 'patch':
-        time_res = float(time_strs[0])
-        step = int(1 / time_res)
-        dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
-        work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_1.0/{recon_methods[0]}'
-        queries_folder = f"{work_dir}/{qry_name}"
-        database_folder = f"{work_dir}/{ref_name}"
-        test_ds = TestDataset(database_folder, queries_folder, positive_dist_threshold=25, image_size=None, use_labels=True)
-        positives_per_query = test_ds.get_positives()
+        if positives_per_query is not None:
+            for q_idx, positives in enumerate(positives_per_query):
+                if len(positives) == 0:
+                    continue
+                ax.plot(positives, [q_idx] * len(positives), 'yo', markersize=1, alpha=0.1)
+                member_pred = np.argmax(mat[q_idx])
+                ax.plot(member_pred, q_idx, 'x', color='#006400' if member_pred in positives else "#710E01", markersize=2, alpha=1)
 
-        base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_strs[0]}/")
-        filename = f"{ref_name}_vs_{qry_name}_{vpr_methods[0]}_l2_reconstruct_{recon_methods[0]}_{time_strs[0]}_{mode}_{suffix}.npy"
-        file_path = base_dir / filename
-        if not file_path.exists():
-            print(f"[!] Missing: {file_path}")
-        loaded_sims = np.load(file_path)
-        smat_list = [subsample_smat(load_sim, step) for load_sim in loaded_sims]   # Subsample the similarity matrix
-    else:
-        for vpr_method in vpr_methods if 'vpr' in ensemble_over else [vpr_methods[0]]:
-            for recon_method in recon_methods if 'recon' in ensemble_over else [recon_methods[0]]:
-                for time_str in time_strs if 'time' in ensemble_over else [time_strs[0]]:
-                    time_res = float(time_str)
-                    step = int(1 / time_res)
-                    
-                    
-                    base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_str}/")
-                    filename = f"{ref_name}_vs_{qry_name}_{vpr_method}_l2_reconstruct_{recon_method}_{time_str}_{mode}_{suffix}.npy"
-                    file_path = base_dir / filename
-                    if not file_path.exists():
-                        print(f"[!] Missing: {file_path}")
-                        continue
-                    smat = np.load(file_path)
-                    smat = subsample_smat(smat, step)  
-                    smat_list.append(smat)
-                    count += 1
+    # Fused plot
+    ax_fused = fig.add_subplot(gs[:, 2])
+    ax_fused.imshow(fused_smat, aspect='auto', cmap='Blues')
+    ax_fused.set_title(f"Fused (recall@1 = {compute_recall_at_1(fused_smat, positives_per_query):.4f})")
+    ax_fused.set_xlabel("Database")
+    ax_fused.set_ylabel("Query")
+    ax_fused.grid(False)
 
-                    dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
-                    work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_{time_res}/{recon_method}'
-                    queries_folder = f"{work_dir}/{qry_name}"
-                    database_folder = f"{work_dir}/{ref_name}"
-                    test_ds = TestDataset(database_folder, queries_folder, positive_dist_threshold=25, image_size=None, use_labels=True)
-                    positives_per_query = test_ds.get_positives()
-    # Check if matrices have different shapes and crop if needed
-    # if min_rows is not None:
-    #     min_rows = len(positives_per_query) if len(positives_per_query) < min_rows else min_rows
-    # print(f"Minimum rows: {min_rows}, Minimum cols: {min_cols}")
-    # if len(smat_list) > 1 and (min_rows is not None and min_cols is not None):
-    #     shapes = [s.shape for s in smat_list]
-    #     smat_list = [s[:min_rows, :min_cols] for s in smat_list] # Crop to smallest shape
-    # positives_per_query = positives_per_query[:min_rows] 
-    print(f"Shape of combined similarity matrix: {smat_list[0].shape}")
-    print(f"Number of queries: {len(positives_per_query)}")
-    list_simMat, recall, combinedSimMat = compute_recall_and_matrix(
-        smat_list, positives_per_query,
-        seq_len=seqLen, mode='list_simMat',
-        seq_match_type='modified',
-        apply_sequence_matching_fn=apply_sequence_matching)
-    
-    print(f"\n\n\n{count} ensembles with recall@1: {recall:.4f} for {dataset_name} ({ref_name} vs {qry_name}), ensemble_over={ensemble_over}, seqLen={seqLen}")
-    print(f"Shape of combined similarity matrix: {combinedSimMat.shape}")
-    print(f"Number of queries: {len(positives_per_query)}")
+    if positives_per_query is not None:
+        for q_idx, positives in enumerate(positives_per_query):
+            if len(positives) == 0:
+                continue
+            ax_fused.plot(positives, [q_idx] * len(positives), 'yo', markersize=1, alpha=0.3)
+            fused_pred = np.argmax(fused_smat[q_idx])
+            ax_fused.plot(fused_pred, q_idx, 'x', color='#006400' if fused_pred in positives else "#710E01", markersize=2, alpha=1)
 
-    return list_simMat, positives_per_query, combinedSimMat, recall
+    plt.tight_layout()
+    os.makedirs('./plots/simMats', exist_ok=True)
+    save_path = f'./plots/simMats/{plotname}.png'
+    plt.savefig(save_path, bbox_inches='tight', format='png')
+    print(f"✅ Saved similarity matrix plot to {save_path}")
+
+
+
+def find_crop_start_index(utms, min_dist_m=2.0):
+    utms = np.array(utms)
+    for i in range(len(utms) - 1):
+        dist = np.linalg.norm(utms[i+1] - utms[i])
+        if dist >= min_dist_m:
+            return i
+    return 0  # fallback: no such pair found
+
 
 
 def load_existing_results(csv_path: Path) -> pd.DataFrame:
@@ -369,6 +262,7 @@ def load_existing_results(csv_path: Path) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+
 def normalize_field(val):
     """Standardize a CSV field: strip, sort comma-lists, lowercase"""
     if pd.isna(val) or val == '':
@@ -379,19 +273,21 @@ def normalize_field(val):
     return val
 
 
+
 def is_duplicate(row: dict, existing_df: pd.DataFrame) -> bool:
     if existing_df.empty:
         return False
 
     for _, existing_row in existing_df.iterrows():
         match = True
-        for key in ['ref_name', 'qry_name', 'ensemble_over', 'vpr_methods', 'recon_methods', 'time_strs']:
+        for key in ['ref_name', 'qry_name', 'ensemble_over', 'vpr_methods', 'recon_methods', 'time_strs', 'seqLen']:
             if key not in existing_row or normalize_field(existing_row[key]) != normalize_field(row[key]):
                 match = False
                 break
         if match:
             return True
     return False
+
 
 
 def save_results(results: List[Dict], csv_path: Path, append: bool = True):
@@ -412,157 +308,172 @@ def save_results(results: List[Dict], csv_path: Path, append: bool = True):
     print(f"✅ {'Appended' if append and csv_path.exists() else 'Saved'} {len(results)} results to {csv_path}")
 
 
-def ensemble_grid_search():
-    """
-    Cleaner grid search for ensemble combinations with proper error handling
-    and efficient duplicate checking.
-    """
-    csv_path = Path('./hpc/ablate_ensemble_combinations.csv')
-    results = []
-    seqLen=1
-    # Configuration
-    seq_id_to_name = {0:'night', 1:'morning', 2: 'sunrise', 3:'sunset1', 4:'sunset2', 5:'daytime', 
-                  6: 'R0_FA0', 7: 'R0_FS0', 8: 'R0_FN0', 9: 'R0_RA0', 10: 'R0_RS0', 11: 'R0_RN0'}
 
-    # experiment_pairs = [ (3,0),(3, 1), (3, 2),(3, 4), (3, 5)] if args_cli.dataset_type == 'Brisbane' else [(6, 7),(6, 8), (8, 7), (9,11), (10, 11)]
-    
-    # dataset_name = "Brisbane"  # or "NSAVP"
-    # ref_qry_pairs = [
-    #     ('sunset1', 'night'),
-    #     ('sunset1', 'morning'),
-    #     ('sunset1', 'sunrise'),
-    #     ('sunset1', 'sunset2'),
-    #     ('sunset1', 'daytime'),
-    # ]
-    dataset_name = "NSAVP"
-    ref_qry_pairs = [
-        ('R0_FA0', 'R0_FS0'),
-        ('R0_FA0', 'R0_FN0'),
-        ('R0_FN0', 'R0_FS0'),
-        ('R0_RA0', 'R0_RN0'),
-        ('R0_RS0', 'R0_RN0'),
-    ]
+def general_ensemble(
+    ref_name: str,
+    qry_name: str,
+    vpr_methods: list,
+    recon_methods: list,
+    time_strs: list,
+    ensemble_over: str = 'vpr',  # Options: 'vpr', 'recon', 'time', 'patch'
+    seqLen: int = 1,
+    result_row: dict = None,
+    csv_path: Path = None):
+    import itertools
 
-    vpr_all = ['mixvpr', 'megaloc', 'cosplace', 'netvlad']
-    recon_all = ['RGB_camera','e2vid', 'eventCount', 'eventCount_noPolarity', 'timeSurface']
-    time_all = [1.0]
-    ensemble_groups = ['vpr', 'recon', 'time', 'patch']
+    if ref_name.startswith('R0_') or qry_name.startswith('R0_'):
+        dataset_name = 'NSAVP'
+    else:
+        dataset_name = 'Brisbane'
 
+    print(f"Ensembling for {dataset_name} ({ref_name} vs {qry_name}), ensemble_over={ensemble_over}, seqLen={seqLen}")
+    suffix = '2_2' if ensemble_over == 'patch' else '1_1'
+    mode = 'patch' if ensemble_over == 'patch' else 'frame'
+    smat_list = []
+    min_rows, min_cols = None, None
+    count = 0
 
-    # Load existing results for duplicate checking
-    existing_df = load_existing_results(csv_path)
-    print(f"Loaded {len(existing_df)} existing results")
-    
-    # Create CSV with headers if it doesn't exist
-    if not csv_path.exists():
-        # Create empty CSV with headers
-        sample_row = {
-            'ref_name': '', 'qry_name': '', 'ensemble_over': '', 
-            'vpr_methods': '', 'recon_methods': '', 'time_strs': '', 'recall@1': 0.0
-        }
-        pd.DataFrame([sample_row]).iloc[0:0].to_csv(csv_path, index=False)  # Empty df with headers
+    def subsample_smat(smat, step):
+        nonlocal min_rows, min_cols
+        rows = np.arange(0, smat.shape[0], step)
+        cols = np.arange(0, smat.shape[1], step)
+        smat = smat[np.ix_(rows, cols)]
+        min_rows = smat.shape[0] if min_rows is None else min(min_rows, smat.shape[0])
+        min_cols = smat.shape[1] if min_cols is None else min(min_cols, smat.shape[1])
+        return smat
 
-    # Run all combinations
-    total_combinations = 0
-    processed_combinations = 0
-    
-    for ref_name, qry_name in ref_qry_pairs:
-        print(f"\n--- Processing {ref_name} vs {qry_name} ---")
+    def loadAndAppendSimMats(smat_list, time_str, ref_name, qry_name, vpr_method, recon_method, count):
         
-        for ensemble_over in ensemble_groups:
-            # Determine which parameters to vary based on ensemble_over
-            if ensemble_over == 'vpr':
-                # Ensemble over VPR methods: pass ALL VPR methods, single recon/time
-                vpr_subsets = [vpr_all] # Full ensemble + all subsets
-                recon_subsets = [[r] for r in recon_all]  # Each recon method individually
-                time_subsets = [[t] for t in time_all]    # Each time value individually
-            elif ensemble_over == 'recon':
-                # Ensemble over reconstruction methods: pass ALL recon methods, single vpr/time
-                vpr_subsets = [[v] for v in vpr_all]      # Each VPR method individually
-                recon_subsets = [recon_all]  # Full ensemble + all subsets
-                time_subsets = [[t] for t in time_all]    # Each time value individually
-            elif ensemble_over == 'time':
-                # Ensemble over time values: pass ALL time values, single vpr/recon
-                vpr_subsets = [[v] for v in vpr_all]      # Each VPR method individually
-                recon_subsets = [[r] for r in recon_all]  # Each recon method individually
-                time_subsets = [time_all]  # Full ensemble + all subsets
-            elif ensemble_over == 'patch':
-                # For patch ensemble, only test individual combinations (no ensembling)
-                vpr_subsets = [[v] for v in vpr_all]
-                recon_subsets = [[r] for r in recon_all]
-                time_subsets = [[t] for t in time_all]
-            else:
-                print(f"Unknown ensemble_over: {ensemble_over}")
-                continue
 
-            combos = list(itertools.product(vpr_subsets, recon_subsets, time_subsets))
-            total_combinations += len(combos)
-            
-            for vprs, recons, times in tqdm(combos, 
-                                          desc=f"{ref_name} vs {qry_name} over {ensemble_over}"):
-                
-                # Create result row for duplicate checking
-                result_row = {
-                    'ref_name': ref_name,
-                    'qry_name': qry_name,
-                    'ensemble_over': ensemble_over,
-                    'vpr_methods': ','.join(vprs),
-                    'recon_methods': ','.join(recons),
-                    'time_strs': ','.join(map(str, times)),
-                    'seqLen': seqLen,  # Default seqLen, can be adjusted later
-                }
-                
-                # Check for duplicates
-                if is_duplicate(result_row, existing_df):
-                    print(f"Skipping duplicate: {result_row}")
-                    continue
-                
-                try:
-                    # Convert time values to strings for the function call
-                    time_strs = [str(t) for t in times]
+        return None
+
+    
+    if 'all' in ensemble_over:
+        for vpr_method in vpr_methods:
+            for recon_method in recon_methods:
+                for time_str in time_strs:
+                    time_res = float(time_str)
+                    step = int(1 / time_res)
+                    base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_str}/")
+                    filename = f"{ref_name}_vs_{qry_name}_{vpr_method}_l2_reconstruct_{recon_method}_{time_str}_{mode}_{suffix}.npy"
+                    file_path = base_dir / filename
+                    if not file_path.exists():
+                        print(f"[!] Missing: {file_path}")
+                        return
+
+                    dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
+                    work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_{time_res}/{recon_method}'
+                    queries_folder = f"{work_dir}/{qry_name}"
+                    database_folder = f"{work_dir}/{ref_name}"
+                    test_ds = TestDataset(
+                        database_folder, queries_folder,
+                        positive_dist_threshold=25, image_size=None, use_labels=True)
+                    r_move=find_crop_start_index(test_ds.database_utms)
+                    q_move=find_crop_start_index(test_ds.queries_utms)
+                    test_ds.queries_utms = test_ds.queries_utms[::step]  # Subsample queries
+                    test_ds.database_utms = test_ds.database_utms[::step]
+                    print(f"len(test_ds.queries_utms)={len(test_ds.queries_utms)}, len(test_ds.database_utms)={len(test_ds.database_utms)}")
+                    positives_per_query = test_ds.get_positives()
+
+                    smat = np.load(file_path) # Load and crop similarity matrix
+                    smat = subsample_smat(smat, step)
+                    smat_list.append(smat)
+                    count += 1
                     
-                    smat, recall = general_ensemble(
-                        ref_name=ref_name,
-                        qry_name=qry_name,
-                        vpr_methods=vprs,
-                        recon_methods=recons,
-                        time_strs=time_strs,
-                        ensemble_over=ensemble_over,
-                        seqLen=seqLen
-                    )
+    else:
+        for vpr_method in vpr_methods if 'vpr' in ensemble_over else [vpr_methods[0]]:
+            for recon_method in recon_methods if 'recon' in ensemble_over else [recon_methods[0]]:
+                for time_str in time_strs if 'time' in ensemble_over else [time_strs[0]]:
+                    time_res = float(time_str)
+                    step = int(1 / time_res)
+                    base_dir = Path(f"logs/{dataset_name}/fixed_timebins_{time_str}/")
+                    filename = f"{ref_name}_vs_{qry_name}_{vpr_method}_l2_reconstruct_{recon_method}_{time_str}_{mode}_{suffix}.npy"
+                    file_path = base_dir / filename
+                    if not file_path.exists():
+                        print(f"[!] Missing: {file_path}")
+                        continue
 
-                    # Add recall to result row
-                    result_row['recall@1'] = recall
-                    results.append(result_row)
-                    processed_combinations += 1
-                    
-                    # Save periodically to avoid data loss
-                    if len(results) % 10 == 0:
-                        save_results(results, csv_path, append=True)
-                        results = []  # Clear results list
-                        existing_df = load_existing_results(csv_path)  # Reload for duplicate checking
+                    dataset_folder = 'BrisbaneEvent' if dataset_name == 'Brisbane' else 'NSAVP'
+                    work_dir = f'../data/{dataset_folder}/image_reconstructions/fixed_timebins_{time_res}/{recon_method}'
+                    queries_folder = f"{work_dir}/{qry_name}"
+                    database_folder = f"{work_dir}/{ref_name}"
+                    test_ds = TestDataset(
+                        database_folder, queries_folder,
+                        positive_dist_threshold=25, image_size=None, use_labels=True)
+                    r_move=find_crop_start_index(test_ds.database_utms)
+                    q_move=find_crop_start_index(test_ds.queries_utms)
+                    test_ds.queries_utms = test_ds.queries_utms[::step]  # Subsample queries
+                    test_ds.database_utms = test_ds.database_utms[::step]
+                    print(f"len(test_ds.queries_utms)={len(test_ds.queries_utms)}, len(test_ds.database_utms)={len(test_ds.database_utms)}")
+                    positives_per_query = test_ds.get_positives()
 
-                except Exception as e:
-                    print(f"[!] Error for {ref_name} vs {qry_name}, "
-                          f"ensemble={ensemble_over}, vpr={vprs}, "
-                          f"recon={recons}, time={times}")
-                    print(f"    Error: {e}")
-                    continue
+                    smat = np.load(file_path) # Load and crop similarity matrix
+                    smat = subsample_smat(smat, step)
+                    smat_list.append(smat)
+                    count += 1
 
-    # Save any remaining results
-    if results:
-        save_results(results, csv_path, append=True)
+    if min_rows is not None:
+        min_rows = len(positives_per_query) if len(positives_per_query) < min_rows else min_rows
+    if len(smat_list) > 1 and (min_rows is not None and min_cols is not None):
+        smat_list = [s[:min_rows, :min_cols] for s in smat_list]
+    positives_per_query = positives_per_query[:min_rows]
+    print(f"Shape of combined similarity matrix: {smat_list[0].shape}")
+    print(f"Number of queries: {len(positives_per_query)}")
+    
 
-    print(f"\n🎉 Grid search completed!")
-    print(f"Total combinations: {total_combinations}")
-    print(f"Processed combinations: {processed_combinations}")
-    print(f"Skipped combinations: {total_combinations - processed_combinations}")
+    # Evaluate individual recalls
+    individual_recalls = []
+    individual_smat_list = []
+    for idx, simMat in enumerate(smat_list):
+        recall_single, simMat_withseq = compute_recall_and_matrix(
+            [simMat], positives_per_query, seq_len=seqLen,
+            mode='list_simMat', seq_match_type='modified',
+            apply_sequence_matching_fn=apply_sequence_matching)
+        individual_recalls.append(recall_single)
+        individual_smat_list.append(simMat_withseq)
 
+    # Compute disagreement between matrices
+    disagreements = []
+    for A, B in itertools.combinations(smat_list, 2):
+        diff_norm = np.linalg.norm(A - B)
+        avg_norm = np.linalg.norm(A + B)
+        disagreements.append(diff_norm / avg_norm if avg_norm > 0 else 0)
+    avg_disagreement = float(np.mean(disagreements)) if disagreements else 0.0
+
+    # Ensemble matrices
+    mean_smat = np.mean(individual_smat_list, axis=0)
+    max_smat = np.max(individual_smat_list, axis=0)
+    med_smat = np.median(np.array(individual_smat_list), axis=0)
+    if len(individual_smat_list) == 4:
+        fused_smat = mean_smat.copy()
+        vpr_str = '-'.join(vpr_methods)
+        time_str = '-'.join(time_strs)
+        recon_str = '-'.join(recon_methods)
+        plotname= f"{ref_name}_vs_{qry_name}_L{seqLen}_VPR-{vpr_str}_T-{time_str}_R-{recon_str}".replace('/', '-')
+        plot_ensemble_similarity_matrices(individual_smat_list, fused_smat, positives_per_query, plotname )
+
+    # Evaluate ensemble fusions
+    recall_mean = compute_recall_at_1(mean_smat, positives_per_query)
+    recall_max = compute_recall_at_1(max_smat, positives_per_query)
+    recall_median = compute_recall_at_1(med_smat, positives_per_query)
+
+    print(f"\n{count} members — Recall@1 (mean): {recall_mean:.4f}, max: {recall_max:.4f}, median: {recall_median:.4f}, disagreement: {avg_disagreement:.4f}")
+    
+    if result_row is not None:
+        result_row.update({
+            'recall@1_mean': recall_mean,
+            'recall@1_max': recall_max,
+            'recall@1_median': recall_median,
+            'recall@1_individual': str(individual_recalls),
+            'avg_disagreement': avg_disagreement,
+        })
+        if csv_path:
+            save_results([result_row], csv_path, append=True)
+
+    
 
 if __name__ == "__main__":
     args = parse_args()
-
-    # Set up result row
     result_row = {
         'ref_name': args.ref_seq,
         'qry_name': args.qry_seq,
@@ -572,21 +483,21 @@ if __name__ == "__main__":
         'time_strs': args.time_strs,
         'seqLen': args.seq_len,}
 
-    csv_path = Path(f'./hpc/ablate_ensemble_combination_sLen_inclRGB.csv')
+    csv_path = Path(f'./hpc/ablate_ensemble_combination_additionalResults.csv')
     existing_df = load_existing_results(csv_path)
 
     if is_duplicate(result_row, existing_df):
         print("✅ Skipping — already exists in CSV.")
     else:
-        list_simMat, positives_per_query, combinedSimMat, recall = general_ensemble(
-            ref_name=args.ref_seq,
-            qry_name=args.qry_seq,
-            vpr_methods=args.vpr_methods.split(','),
-            recon_methods=args.recon_methods.split(','),
-            time_strs=args.time_strs.split(','),
-            ensemble_over=args.ensemble_over,
-            seqLen=args.seq_len
-        )
+        general_ensemble(
+        ref_name=args.ref_seq,
+        qry_name=args.qry_seq,
+        vpr_methods=args.vpr_methods.split(','),
+        recon_methods=args.recon_methods.split(','),
+        time_strs=args.time_strs.split(','),
+        ensemble_over=args.ensemble_over,
+        seqLen=args.seq_len,
+        result_row=result_row,
+        csv_path=csv_path)
 
-        result_row['recall@1'] = recall
-        save_results([result_row], csv_path, append=True)
+# python ablate_ensembles.py --dataset_name NSAVP --ref_seq R0_FN0 --qry_seq R0_FS0 --vpr_methods "mixvpr,megaloc,cosplace,netvlad" --recon_methods "e2vid,eventCount,eventCount_noPolarity,timeSurface" --time_strs "0.1,0.25,0.5,1.0" --ensemble_over all --seq_len 10

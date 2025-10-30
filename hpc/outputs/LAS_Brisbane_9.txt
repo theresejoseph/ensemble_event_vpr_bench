@@ -1,7 +1,0 @@
-Using dataset type: Brisbane
-0 1
-Processing sequence: night for ref  from ../data/BrisbaneEvent/image_reconstructions/fixed_timebins_15.0/eventCount/night
-PBS Job 8671697.aqua
-CPU time  : 00:00:08
-Wall time : 00:00:10
-Mem usage : 98876kb

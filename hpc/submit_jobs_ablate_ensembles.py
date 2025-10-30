@@ -28,7 +28,7 @@ def is_duplicate(row: dict, existing_df: pd.DataFrame) -> bool:
 
     for _, existing_row in existing_df.iterrows():
         match = True
-        for key in ['ref_name', 'qry_name', 'ensemble_over', 'vpr_methods', 'recon_methods', 'time_strs']:
+        for key in ['ref_name', 'qry_name', 'ensemble_over', 'vpr_methods', 'recon_methods', 'time_strs', 'seqLen']:
             if key not in existing_row or normalize_field(existing_row[key]) != normalize_field(row[key]):
                 match = False
                 break
@@ -39,7 +39,7 @@ def is_duplicate(row: dict, existing_df: pd.DataFrame) -> bool:
 
 os.makedirs("hpc/jobs", exist_ok=True)
 job_counter = 0
-max_batch_size = 5
+max_batch_size = 1
 gpu_use = 0
 ref_qry_pairs = [
     ('R0_FA0', 'R0_FS0'),
@@ -49,24 +49,28 @@ ref_qry_pairs = [
     ('R0_RS0', 'R0_RN0'),
 ]
 dataset = "NSAVP"
-# dataset = "Brisbane" 
-# ref_qry_pairs = [
-#     ('sunset1', 'night'),
-#     ('sunset1', 'morning'),
-#     ('sunset1', 'sunrise'),
-#     ('sunset1', 'sunset2'),
-#     ('sunset1', 'daytime'),
-# ]
-slens = [10, 20, 30]  # Fixed sequence lengths
-vpr_all = ['mixvpr', 'megaloc', 'cosplace', 'netvlad']
-recon_all = ['RGB_camera','e2vid', 'eventCount', 'eventCount_noPolarity', 'timeSurface']
+dataset = "Brisbane" 
+ref_qry_pairs = [
+    ('sunset1', 'night'),
+    ('sunset1', 'morning'),
+    ('sunset1', 'sunrise'),
+    ('sunset1', 'sunset2'),
+    ('sunset1', 'daytime'),
+]
+slens = [10,20,30]  # Fixed sequence lengths
+vpr_all = ['mixvpr','megaloc', 'cosplace', 'netvlad']
+recon_all = ['e2vid', 'eventCount', 'eventCount_noPolarity', 'timeSurface']
 time_all = [0.1,0.25,0.5,1.0]
-ensemble_groups = ['recon', 'vpr', 'patch']  # 'recon', 'vpr', 'time', 'patch'
-csv_path = Path(f'./hpc/ablate_ensemble_combination_noSubsamp.csv')
+ensemble_groups = ['recon','vpr', 'time']  # 'recon', 'vpr', 'time', 'patch'
+csv_path = Path(f'./hpc/ablate_ensemble_combination_additionalResults.csv')
 existing_df = load_existing_results(csv_path)
 
 
 def write_and_submit_job_batch(job_id, job_entries):
+    # Ensure directories exist
+    os.makedirs("./hpc/jobs", exist_ok=True)
+    os.makedirs("./hpc/outputs", exist_ok=True)
+
     job_script = f"hpc/jobs/job_ensemble_{job_id}.sh"
     with open(job_script, "w") as f:
         f.write(f"""#!/bin/bash -l
@@ -92,58 +96,99 @@ conda activate vpr_eval_py310
     print(f"🟢 Wrote job {job_id} with {len(job_entries)} entries")
     os.system(f"qsub {job_script}")
 
-# Generate jobs
+# Generate jobs 
+# CASE 0: all combined 
 job_entries = []
-for seq_len in slens:  # Fixed sequence length
-    for ref, qry in ref_qry_pairs:
-        for group in ensemble_groups:
-            if group == "vpr":
-                vprs = [",".join(vpr_all)]
-                recons = recon_all
-                times = time_all
-            elif group == "recon":
-                vprs = vpr_all
-                recons = [",".join(recon_all)]
-                times = time_all
-            elif group == "time":
-                vprs = vpr_all
-                recons = recon_all
-                times = [",".join(map(str, time_all))]
-            else:  # patch: no ensemble, individual only
-                vprs = vpr_all
-                recons = recon_all
-                times = time_all
-
-            for v, r, t in product(vprs, recons, times):
-                result_row = {
+for dataset in ['NSAVP', 'Brisbane']:
+    ref_qry_pairs = [('sunset1', 'night'),('sunset1', 'morning'),('sunset1', 'sunrise'),('sunset1', 'sunset2'),('sunset1', 'daytime')] if dataset == 'Brisbane' else [('R0_FA0', 'R0_FS0'),('R0_FA0', 'R0_FN0'),('R0_FN0', 'R0_FS0'),('R0_RA0', 'R0_RN0'),('R0_RS0', 'R0_RN0')]
+    for seq_len in slens:  # Fixed sequence length
+        for ref, qry in ref_qry_pairs:
+            result_row = {
                     'ref_name': ref,
                     'qry_name': qry,
-                    'ensemble_over': group,
-                    'vpr_methods': v,
-                    'recon_methods': r,
-                    'time_strs': str(t),
-                    'seqLen': seq_len,
+                'ensemble_over': 'all',
+                'vpr_methods': str(vpr_all),
+                'recon_methods': str(recon_all),
+                'time_strs': str(time_all),
+                'seqLen': seq_len,
                 }
 
-                if is_duplicate(result_row, existing_df):
-                    print(f"⏭️ Skipping existing job: {result_row}")
-                    continue
-                entry = {
-                    "dataset": dataset,
-                    "ref_seq": ref,
-                    "qry_seq": qry,
-                    "ensemble_over": group,
-                    "vpr_methods": v,
-                    "recon_methods": r,
-                    "time_strs": str(t),
-                    "seq_len": seq_len }
-                job_entries.append(entry)
+            if is_duplicate(result_row, existing_df):
+                print(f"⏭️ Skipping existing job: {result_row}")
+                continue
+            entry = {
+                "dataset": dataset,
+                "ref_seq": ref,
+                "qry_seq": qry,
+                "ensemble_over": "all",
+                "vpr_methods": "mixvpr,megaloc,cosplace,netvlad",
+                "recon_methods": "e2vid,eventCount,eventCount_noPolarity,timeSurface",
+                "time_strs": "0.1,0.25,0.5,1.0",
+                "seq_len": seq_len }
+            job_entries.append(entry)
 
-                if len(job_entries) == max_batch_size:
-                    write_and_submit_job_batch(job_counter, job_entries)
-                    job_counter += 1
-                    job_entries = []
-                    # assert False 
+            if len(job_entries) == max_batch_size:
+                write_and_submit_job_batch(job_counter, job_entries)
+                job_counter += 1
+                job_entries = []
+                # assert False 
 
 if job_entries:
     write_and_submit_job_batch(job_counter, job_entries)
+
+
+# CASE 1 every Combinations 
+# job_entries = []
+# for seq_len in slens:  # Fixed sequence length
+#     for ref, qry in ref_qry_pairs:
+#         for group in ensemble_groups:
+#             if group == "vpr":
+#                 vprs = [",".join(vpr_all)]
+#                 recons = recon_all
+#                 times = time_all
+#             elif group == "recon":
+#                 vprs = vpr_all
+#                 recons = [",".join(recon_all)]
+#                 times = time_all
+#             elif group == "time":
+#                 vprs = vpr_all
+#                 recons = recon_all
+#                 times = [",".join(map(str, time_all))]
+#             else:  # patch: no ensemble, individual only
+#                 vprs = vpr_all
+#                 recons = recon_all
+#                 times = time_all
+
+#             for v, r, t in product(vprs, recons, times):
+#                 result_row = {
+#                     'ref_name': ref,
+#                     'qry_name': qry,
+#                     'ensemble_over': group,
+#                     'vpr_methods': v,
+#                     'recon_methods': r,
+#                     'time_strs': str(t),
+#                     'seqLen': seq_len,
+#                 }
+
+#                 if is_duplicate(result_row, existing_df):
+#                     print(f"⏭️ Skipping existing job: {result_row}")
+#                     continue
+#                 entry = {
+#                     "dataset": dataset,
+#                     "ref_seq": ref,
+#                     "qry_seq": qry,
+#                     "ensemble_over": group,
+#                     "vpr_methods": v,
+#                     "recon_methods": r,
+#                     "time_strs": str(t),
+#                     "seq_len": seq_len }
+#                 job_entries.append(entry)
+
+#                 if len(job_entries) == max_batch_size:
+#                     write_and_submit_job_batch(job_counter, job_entries)
+#                     job_counter += 1
+#                     job_entries = []
+#                     # assert False 
+
+# if job_entries:
+#     write_and_submit_job_batch(job_counter, job_entries)

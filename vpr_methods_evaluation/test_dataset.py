@@ -126,13 +126,8 @@ class TestDataset(data.Dataset):
                 [(path.split("@")[1], path.split("@")[2]) for path in self.queries_paths]
             ).astype(float)
 
+            self.positive_dist_threshold = positive_dist_threshold
             
-
-            # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
-            knn = NearestNeighbors(n_jobs=-1)
-            knn.fit(self.database_utms)
-            self.positive_distances, self.positives_per_query = knn.radius_neighbors(self.queries_utms, radius=positive_dist_threshold, return_distance=True)
-
         transformations = [
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -154,6 +149,10 @@ class TestDataset(data.Dataset):
         return f"< #queries: {self.num_queries}; #database: {self.num_database} >"
 
     def get_positives(self):
-        return self.positives_per_query
+        # Find positives_per_query, which are within positive_dist_threshold (default 25 meters)
+        knn = NearestNeighbors(n_jobs=-1)
+        knn.fit(self.database_utms)
+        self.positive_distances, self.positives_per_query = knn.radius_neighbors(self.queries_utms, radius=self.positive_dist_threshold, return_distance=True)
 
+        return self.positives_per_query
 

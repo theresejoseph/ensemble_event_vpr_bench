@@ -3,20 +3,46 @@ import csv
 from pathlib import Path
 # Settings
 
-seq_lens = [1,10,20,30]
+seq_lens = [10,20,30]
 dataset_list = ['Brisbane', 'NSAVP']
 patch_or_frame = 'frame'  # Options for patch or frame
 patch_rows = 2 if patch_or_frame == 'patch' else 1
 patch_cols = 2 if patch_or_frame == 'patch' else 1
 gpu_methods = [ 'mixvpr', 'netvlad', 'cosplace', 'megaloc']
-reps = ['RGB_camera']# ['e2vid','timeSurface', 'eventCount', 'eventCount_noPolarity']  # 'timeSurface' or 'eventCount'
+reps = ['e2vid','timeSurface', 'eventCount', 'eventCount_noPolarity']  # 'timeSurface' or 'eventCount'
 events_per_bins = [100_000, 200_000, 300_000, 500_000, 1_000_000]
-time_res_list = [1.0 ]#0.1, 0.15, 0.2, 0.25, 0.5, 
+time_res_list = [1.0, 0.1, 0.2, 0.25, 0.5]
 sequences = ["night","morning", "sunrise", "sunset1", "sunset2", "daytime",
                         'R0_FA0', 'R0_FS0', 'R0_FN0', 'R0_RA0', 'R0_RS0', 'R0_RN0']
-
 os.makedirs("hpc/jobs", exist_ok=True)
 job_counter = 0
+from pathlib import Path
+import csv
+
+def normalize(val):
+    if val is None or str(val).lower() in ['nan', 'none', '']:
+        return ''
+    try:
+        f = float(val)
+        return str(int(f)) if f.is_integer() else str(f)
+    except:
+        return str(val).strip()
+
+
+
+def load_existing_results(csv_path, key_fields):
+    existing_keys = set()
+    if not csv_path.exists():
+        print(f"⚠️ CSV {csv_path} not found – assuming no results exist.")
+        return existing_keys
+    
+    with open(csv_path, newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            key = tuple(normalize(row.get(k)) for k in key_fields)
+            existing_keys.add(key)
+    return existing_keys
+
 
 
 def check_if_result_exists(csv_path, row_dict, key_fields, verbose=False):   
@@ -55,9 +81,9 @@ def write_and_submit_job_batch(job_id, job_entries, gpu_use=0):
     with open(job_script, "w") as f:
         f.write(f"""#!/bin/bash -l
 #PBS -N VPR_{job_id}_{dataset_type} 
-#PBS -l walltime=03:00:00
+#PBS -l walltime=08:00:00
 #PBS -l mem=32GB
-#PBS -l ncpus=4
+#PBS -l ncpus=6
 #PBS -l ngpus={gpu_use}
 #PBS -j oe
 #PBS -o hpc/outputs/VPR_{dataset_type}_{job_id}.txt
@@ -80,6 +106,12 @@ conda activate vpr_eval_py310
 
 job_counter = 0
 gpu_use = 0  # Default to CPU jobs
+csv_path = Path(f'./results/seqMatch_vs_modified_results_fixed_timebins.csv')
+key_fields = [
+    "ref_seq", "qry_seq", "reconstruction_name", "vpr_method",
+    "seq_len", "bin_type", "time_res", "seq_match_type"]
+existing_keys = load_existing_results(csv_path, key_fields)
+
 '''Case 1: sweep over all TIME_RES values count_bin = 0, adaptive_bin = 0'''
 job_entries = []
 max_batch_size = 1
@@ -99,20 +131,15 @@ for seq_len in seq_lens:
                             "seq_len": seq_len,
                             "bin_type": "timebin",
                             "time_res": time_res,
-                            "positive_dist_thresh": 25,
-                            "patch_or_frame": patch_or_frame,
-                            "seq_match_type": 'modified',
-                            "patch_rows": patch_rows,
-                            "patch_cols": patch_cols,
-                        }
+                            "seq_match_type": 'seqslam',}
+                        
+                        # simMatPath = Path(f"./logs/{dataset_type}/fixed_timebins_{time_res}/{ref_seq}_vs_{qry_seq}_{method}_l2_reconstruct_{reconstruct_method}_{time_res}_{patch_or_frame}_{patch_rows}_{patch_cols}.npy")
+                        # # gpu_use = 0 if simMatPath.exists() else 1
+                        # gpu_use = 0
 
-                        key_fields = list(row_dict.keys())
-                        csv_path = Path(f'./results/vpr_results_{dataset_type}_fixed_timebins_{time_res}.csv')
-                        simMatPath = Path(f"./logs/{dataset_type}/fixed_timebins_{time_res}/{ref_seq}_vs_{qry_seq}_{method}_l2_reconstruct_{reconstruct_method}_{time_res}_{patch_or_frame}_{patch_rows}_{patch_cols}.npy")
-                        gpu_use = 0 if simMatPath.exists() else 1
-
-                        if check_if_result_exists(csv_path, row_dict, key_fields):
-                            print(f"Skipping {ref_seq} vs {qry_seq} with {method} rowcol {patch_rows},{patch_cols}, time {time_res}- already done.")
+                        row_key = tuple(normalize(row_dict[k]) for k in key_fields)
+                        if row_key in existing_keys:
+                            print(f"✅ Skipping {row_key}")
                             continue
 
                         job_args = {
