@@ -685,6 +685,8 @@ def run_vpr(args):
 
     return recall_at_1, auc
 
+
+
 def run_vpr_fill_auc(args):
     from load_and_save import make_paths
     metric = 'l2'
@@ -827,10 +829,9 @@ def run_vpr_fill_auc(args):
 
 
 
-
 def run_vpr_save_results(args):
     """
-    Run a single VPR evaluation and return Recall@1 (no CSV output, no seq_len loop).
+    Run a single VPR evaluation
     """
     from load_and_save import make_paths
     args.seq_match_type = 'seqslam'

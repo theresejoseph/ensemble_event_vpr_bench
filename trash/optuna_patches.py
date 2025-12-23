@@ -3,7 +3,7 @@ import argparse
 import time 
 import numpy as np
 import optuna
-from training import default_args_training, run_experiment
+from trash.training import default_args_training, run_experiment
 from load_and_save import load_save_data, make_paths
 parser = argparse.ArgumentParser(description="Hyperparameter Optimisation with Optuna")
 parser.add_argument("--expName", type=str, default='debug', help="Experiment Number")

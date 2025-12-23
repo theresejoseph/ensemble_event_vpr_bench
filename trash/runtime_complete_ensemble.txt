@@ -1,0 +1,4 @@
+unique_combos=16
+recon_total_s=0.598122
+fe_total_s=0.832000
+complete_ensemble_total_s=1.430122

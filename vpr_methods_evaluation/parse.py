@@ -93,7 +93,7 @@ def parse_arguments(method=None):
         help="set to True if you want to save the descriptors extracted by the model",
     )
 
-    parser.add_argument('--dataset_type', type=str, help='Dataset type (will be auto-deter)')
+    parser.add_argument('--dataset_type', type=str, default='Brisbane', help='Dataset type (will be auto-detected)')
     parser.add_argument('--ref_seq_idx', type=int, default=None)
     parser.add_argument('--qry_seq_idx', type=int, default=None)
     parser.add_argument('--reconstruct_method_name', type=str, default=None)

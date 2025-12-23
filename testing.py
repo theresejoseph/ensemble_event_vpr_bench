@@ -102,7 +102,7 @@ def args_for_vpr(args_cli, reconstruct_method_name, idR, idQ):
     args_vpr.sequences = args_cli.sequences
     args_vpr.dataset_type = args_cli.dataset_type
     args_vpr.reconstruct_method_name = reconstruct_method_name
-    args_vpr.saveSimMat = True #<---------------------------------------------------- change this to True if you want to save the similarity matrix
+    args_vpr.saveSimMat = True
     
     args_vpr.adaptive_bin = args_cli.adaptive_bin
     args_vpr.expTag = ''
@@ -148,9 +148,7 @@ def run_single_experiment():
     idQ = args_cli.qry_seq_idx  
     reconstruct_method_name = args_cli.reconstruct_method_name
     print(f"Running VPR for idR={idR}, idQ={idQ}, reconstruct_method_name={reconstruct_method_name}")
-    # if args_cli.count_bin == 1 and args_cli.events_per_bin == 1_000_000:
-    #     print("Using eventCount reconstruction with 1M events per bin")
-    #     process_pair(args_cli, reconstruct_method_name, idR, idQ)
+    # reconstruct_method_name, idR, idQ, ref_qry_lens = process_pair(args_cli, reconstruct_method_name, idR, idQ)
     args_vpr = args_for_vpr(args_cli, reconstruct_method_name, idR, idQ)
     recall_at_1 = run_vpr_save_results(args_vpr)
     
@@ -226,7 +224,7 @@ def run_all_experiments():
                         run_vpr_fill_auc(args_vpr)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     args_cli = default_args_testing()
 
     # run_single_experiment()
